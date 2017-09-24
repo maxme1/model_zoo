@@ -2,11 +2,10 @@ import sys
 import os
 import numpy as np
 
-
 def load_mnist():
     # code taken from lasagne tutorial
     # https://github.com/Lasagne/Lasagne/blob/master/examples/mnist.py
-
+    
     if sys.version_info[0] == 2:
         from urllib import urlretrieve
     else:
@@ -15,7 +14,6 @@ def load_mnist():
     def download(filename, source='http://yann.lecun.com/exdb/mnist/'):
         print("Downloading %s" % filename)
         urlretrieve(source + filename, filename)
-
     import gzip
 
     def load_mnist_images(filename):
@@ -32,7 +30,6 @@ def load_mnist():
         with gzip.open(filename, 'rb') as f:
             data = np.frombuffer(f.read(), np.uint8, offset=8)
         return data
-
     X_train = load_mnist_images('train-images-idx3-ubyte.gz')
     y_train = load_mnist_labels('train-labels-idx1-ubyte.gz')
     X_test = load_mnist_images('t10k-images-idx3-ubyte.gz')
@@ -56,19 +53,3 @@ def minibatches(inputs, targets, batch_size, shuffle=True, strict=True):
         else:
             excerpt = slice(start_idx, start_idx + batch_size)
         yield inputs[excerpt], targets[excerpt]
-
-
-def random_cycle(*inputs, batch_size):
-    size = len(inputs[0])
-    for x in inputs:
-        assert len(x) == size
-    batch = []
-    while True:
-        idx = np.random.randint(0, size)
-        res = [x[idx] for x in inputs]
-        if len(res) == 1:
-            res = res[0]
-        batch.append(res)
-        if len(batch) == batch_size:
-            yield batch
-            batch = []
