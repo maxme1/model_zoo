@@ -4,10 +4,8 @@ import numpy as np
 
 
 def get_grid(shape):
-    # TODO: generalize to ndim
-    i = np.arange(shape[0])
-    j = np.arange(shape[1])
-    return np.array(np.meshgrid(j, i))
+    ranges = [np.arange(s) for s in reversed(shape)]
+    return np.array(np.meshgrid(*ranges))
 
 
 def add_spatial(array, ndim):
@@ -26,27 +24,22 @@ def get_anchor_shapes(scales, ratios):
     return np.array(result)
 
 
-def get_overlaps(coordinates, anchor_shape, box_corner, box_shape):
-    anchor_shape = anchor_shape.flatten()
-    half_shape = anchor_shape / 2
-    end = np.array(box_corner) + box_shape - half_shape
-    begin = box_corner + half_shape
+def get_overlaps(first_begin, first_shape, second_begin, second_shape):
+    delta = np.minimum(first_begin + first_shape, second_begin + second_shape) - np.maximum(first_begin, second_begin)
+    delta[delta < 0] = 0
+    inter = np.prod(delta, axis=0)
 
-    result = []
-    for shape, coord, e, b in zip(anchor_shape, coordinates, end, begin):
-        temp = shape + np.minimum(coord, e) - np.maximum(coord, b)
-        temp[temp < 0] = 0
-        result.append(temp)
-
-    return np.prod(result, axis=0) / np.prod(anchor_shape)
+    return inter / np.prod(first_shape, axis=0)
 
 
 def get_mask_and_params(coordinates, boxes, anchor_shape):
     mask = params = 0
+    anchor_shape = add_spatial(anchor_shape, coordinates.ndim)
     for box in boxes:
+        box = add_spatial(box, coordinates.ndim)
         overlaps = get_overlaps(coordinates, anchor_shape, box[:2], box[2:]) > .5
         mask = np.logical_or(mask, overlaps)
-        params += (overlaps & np.logical_not(params)) * add_spatial(box, coordinates.ndim)
+        params += (overlaps & np.logical_not(params)) * box
     return mask, params
 
 
@@ -66,11 +59,33 @@ def get_all_masks(coordinates, boxes, anchor_shapes):
 
         masks.append(mask)
         params.append(pars)
-    return np.stack(masks), np.concatenate(params)
+    return np.stack(masks), np.stack(params)
 
 
-def get_gt(img_spatial_shape, fmap_spatial_shape, boxes, anchors):
+def get_gt(img_spatial_shape, boxes, fmap_spatial_shape, anchors):
     grid = get_grid(fmap_spatial_shape)
     scale = add_spatial(np.array(img_spatial_shape) / fmap_spatial_shape, grid.ndim)
     masks, box_params = get_all_masks(grid * scale, boxes, anchors)
     return masks, box_params
+
+
+def IoU(first_begin, first_shape, second_begin, second_shape):
+    delta = np.minimum(first_begin + first_shape, second_begin + second_shape) - np.maximum(first_begin, second_begin)
+    delta[delta < 0] = 0
+    inter = np.prod(delta, axis=0)
+
+    return inter / (np.prod(first_shape, axis=0) + np.prod(second_shape, axis=0) - inter)
+
+
+def non_max_suppression(params, probs):
+    result = []
+    params = params.T
+    while params.size:
+        idx = probs.argmax()
+        reference = params[idx]
+        mask = IoU(params.T[:2], params.T[2:], reference[:2, None], reference[2:, None]) < .5
+        params = params[mask]
+        probs = probs[mask]
+
+        result.append(reference)
+    return np.array(result)
