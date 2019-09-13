@@ -98,21 +98,21 @@ class Transformer(nn.Module):
     def __init__(self, input_vocab, output_vocab=None, n_blocks=6, embedding_dim=512, middle_features=64, h=8,
                  conv_features=2048):
         super().__init__()
-        embedding = nn.Embedding(input_vocab, embedding_dim)
+        self.embedding = nn.Embedding(input_vocab, embedding_dim)
         if output_vocab is None:
-            out_embedding = embedding
+            self.out_embedding = self.embedding
             output_vocab = input_vocab
         else:
-            out_embedding = nn.Embedding(output_vocab, embedding_dim)
+            self.out_embedding = nn.Embedding(output_vocab, embedding_dim)
 
         self.encoder = nn.Sequential(
-            embedding, PositionalEncoding(),
+            self.embedding, PositionalEncoding(),
             *(EncoderBlock(h, embedding_dim, middle_features, conv_features) for _ in range(n_blocks))
         )
         self.decoder = nn.ModuleList(
             [DecoderBlock(h, embedding_dim, middle_features, conv_features) for _ in range(n_blocks)]
         )
-        self.decoder_in = nn.Sequential(out_embedding, PositionalEncoding())
+        self.decoder_in = nn.Sequential(self.out_embedding, PositionalEncoding())
         self.decoder_out = nn.Linear(embedding_dim, output_vocab, bias=False)
 
     def forward(self, x, y):
